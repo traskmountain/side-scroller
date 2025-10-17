@@ -1,0 +1,18 @@
+# Development files
+*.log
+*.tmp
+debug.log
+error.log
+
+# Backup files
+*_old.*
+*_backup.*
+*.bak
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+test_*.sh
+test_*.html

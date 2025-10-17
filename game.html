@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Side Scroller Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1a1a2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Courier New', monospace;
+            color: white;
+        }
+
+        #gameContainer {
+            text-align: center;
+        }
+
+        #gameCanvas {
+            border: 3px solid #16213e;
+            background: #0f3460;
+            display: block;
+            margin: 20px auto;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        #score {
+            font-size: 24px;
+            margin: 10px;
+            color: #e94560;
+        }
+
+        #instructions {
+            font-size: 16px;
+            margin: 10px;
+            color: #aaa;
+        }
+
+        #gameOver {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 40px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        #gameOver h1 {
+            color: #e94560;
+            margin-bottom: 20px;
+        }
+
+        #gameOver button {
+            background: #e94560;
+            color: white;
+            border: none;
+            padding: 10px 30px;
+            font-size: 18px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+        }
+
+        #gameOver button:hover {
+            background: #ff6b7a;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="score">SCORE: 0</div>
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <div id="instructions">Press SPACE or click to jump • Hold to stay up</div>
+
+        <div id="gameOver">
+            <h1>GAME OVER!</h1>
+            <p id="finalScore"></p>
+            <button onclick="restartGame()">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game state
+        let gameRunning = true;
+        let score = 0;
+        let frame = 0;
+
+        // Player
+        const player = {
+            x: 100,
+            y: 300,
+            width: 40,
+            height: 40,
+            vy: 0,
+            jumping: false,
+            gravity: 0.6,
+            jumpForce: -12
+        };
+
+        // Arrays for game objects
+        let obstacles = [];
+        let enemies = [];
+        let coins = [];
+
+        // Input
+        let keyPressed = false;
+
+        // Event listeners
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                keyPressed = true;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.code === 'Space') {
+                keyPressed = false;
+            }
+        });
+
+        canvas.addEventListener('click', () => {
+            keyPressed = true;
+            setTimeout(() => keyPressed = false, 100);
+        });
+
+        // Game functions
+        function spawnObstacle() {
+            obstacles.push({
+                x: canvas.width,
+                y: 340,
+                width: 30,
+                height: 40
+            });
+        }
+
+        function spawnEnemy() {
+            enemies.push({
+                x: canvas.width,
+                y: 200 + Math.random() * 100,
+                width: 30,
+                height: 30
+            });
+        }
+
+        function spawnCoin() {
+            coins.push({
+                x: canvas.width,
+                y: 150 + Math.random() * 150,
+                width: 20,
+                height: 20
+            });
+        }
+
+        function update() {
+            if (!gameRunning) return;
+
+            frame++;
+
+            // Handle jump
+            if (keyPressed) {
+                if (!player.jumping) {
+                    player.vy = player.jumpForce;
+                    player.jumping = true;
+                } else {
+                    // Hold to stay up
+                    if (player.y <= 150) {
+                        player.vy = 0;
+                        player.y = 150;
+                    } else if (player.vy > -2) {
+                        player.vy = -2;
+                    }
+                }
+            }
+
+            // Physics
+            if (player.jumping) {
+                player.vy += player.gravity;
+                player.y += player.vy;
+
+                if (player.y >= 300) {
+                    player.y = 300;
+                    player.vy = 0;
+                    player.jumping = false;
+                }
+            }
+
+            // Update obstacles
+            obstacles = obstacles.filter(obs => {
+                obs.x -= 5;
+                if (obs.x < -obs.width) {
+                    score += 10;
+                    return false;
+                }
+                return true;
+            });
+
+            // Update enemies
+            enemies = enemies.filter(enemy => {
+                enemy.x -= 7;
+                if (enemy.x < -enemy.width) {
+                    score += 5;
+                    return false;
+                }
+                return true;
+            });
+
+            // Update coins
+            coins = coins.filter(coin => {
+                coin.x -= 5;
+
+                // Check collision with player
+                if (coin.x < player.x + player.width &&
+                    coin.x + coin.width > player.x &&
+                    coin.y < player.y + player.height &&
+                    coin.y + coin.height > player.y) {
+                    score += 50;
+                    return false;
+                }
+
+                return coin.x > -coin.width;
+            });
+
+            // Check collisions with obstacles
+            for (let obs of obstacles) {
+                if (obs.x < player.x + player.width - 10 &&
+                    obs.x + obs.width > player.x + 10 &&
+                    player.y + player.height > obs.y) {
+                    gameOver();
+                }
+            }
+
+            // Check collisions with enemies
+            for (let enemy of enemies) {
+                if (enemy.x < player.x + player.width - 10 &&
+                    enemy.x + enemy.width > player.x + 10 &&
+                    enemy.y < player.y + player.height - 10 &&
+                    enemy.y + enemy.height > player.y + 10) {
+                    gameOver();
+                }
+            }
+
+            // Spawn objects
+            if (frame % 80 === 0) spawnObstacle();
+            if (frame % 120 === 0 && frame > 100) spawnEnemy();
+            if (frame % 200 === 0 && frame > 200) spawnCoin();
+        }
+
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#0f3460';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw ground
+            ctx.fillStyle = '#16213e';
+            ctx.fillRect(0, 340, canvas.width, 60);
+
+            // Draw grid lines
+            ctx.strokeStyle = '#1a2a4e';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < canvas.width; i += 50) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+            }
+
+            // Draw player
+            ctx.fillStyle = '#00ff88';
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            // Draw player character
+            ctx.fillStyle = '#fff';
+            ctx.font = '20px Courier New';
+            ctx.fillText('»-(o)->', player.x - 5, player.y + 27);
+
+            // Draw obstacles
+            ctx.fillStyle = '#e94560';
+            for (let obs of obstacles) {
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+            }
+
+            // Draw enemies
+            ctx.fillStyle = '#ff6b6b';
+            for (let enemy of enemies) {
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                ctx.fillStyle = '#fff';
+                ctx.font = '24px Courier New';
+                ctx.fillText('X', enemy.x + 6, enemy.y + 22);
+                ctx.fillStyle = '#ff6b6b';
+            }
+
+            // Draw coins
+            ctx.fillStyle = '#ffd700';
+            for (let coin of coins) {
+                ctx.beginPath();
+                ctx.arc(coin.x + coin.width/2, coin.y + coin.height/2, coin.width/2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#fff';
+                ctx.font = '16px Courier New';
+                ctx.fillText('$', coin.x + 6, coin.y + 15);
+                ctx.fillStyle = '#ffd700';
+            }
+
+            // Update score display
+            document.getElementById('score').textContent = `SCORE: ${score}`;
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            document.getElementById('finalScore').textContent = `Final Score: ${score}`;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+
+        function restartGame() {
+            gameRunning = true;
+            score = 0;
+            frame = 0;
+            player.y = 300;
+            player.vy = 0;
+            player.jumping = false;
+            obstacles = [];
+            enemies = [];
+            coins = [];
+            keyPressed = false;
+            document.getElementById('gameOver').style.display = 'none';
+        }
+
+        // Game loop
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start game
+        gameLoop();
+    </script>
+</body>
+</html>
